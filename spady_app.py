@@ -14,7 +14,7 @@ STRETCH_MM = 5.0
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
 DPI = 300
 
-LOGO_PATH = "assets/logo CR.png"  # <- wrzuć logo do repo w tej ścieżce
+LOGO_PATH = "assets/logo CR.png"  # <- Twoje logo
 
 
 # =========================
@@ -201,12 +201,12 @@ div[data-testid="stFileUploader"] section{
 .download-green button {
   background-color: #2e7d32 !important;
   color: #ffffff !important;
-  font-size: 18px !important;
-  font-weight: 800 !important;
-  padding: 16px 18px !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  padding: 18px 18px !important;
   border-radius: 14px !important;
   border: none !important;
-  box-shadow: 0 8px 18px rgba(46,125,50,0.18) !important;
+  box-shadow: 0 10px 22px rgba(46,125,50,0.22) !important;
 }
 .download-green button:hover {
   background-color: #1b5e20 !important;
@@ -292,12 +292,15 @@ with st.spinner("Przetwarzam…"):
         st.stop()
 
 # =========================
-# PODGLĄD: TYLKO PO SPADACH, DUŻY, JEDEN POD DRUGIM
+# PODGLĄD: W JEDNYM WIERSZU OBOK SIEBIE (TYLKO PO SPADACH)
 # =========================
 st.markdown("## Podgląd po dodaniu spadów")
-for i, img in enumerate(processed, start=1):
-    st.markdown(f"### Strona {i}")
-    st.image(img, use_container_width=True)
+
+cols = st.columns(len(processed), gap="large")
+for i, (col, img) in enumerate(zip(cols, processed), start=1):
+    with col:
+        st.markdown(f"### Strona {i}")
+        st.image(img, use_container_width=True)
 
 # =========================
 # POBRANIE + KOMUNIKAT + AUTO-SCROLL
@@ -343,4 +346,3 @@ st.markdown("""
   if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
 </script>
 """, unsafe_allow_html=True)
-
