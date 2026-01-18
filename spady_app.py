@@ -1,15 +1,37 @@
 import io
+import base64
+from pathlib import Path
+
 import fitz  # PyMuPDF
 import streamlit as st
 from PIL import Image
 
-# --- Stała zasada spadów ---
+# =========================
+# USTAWIENIA (STAŁE)
+# =========================
 STRIP_MM = 2.0       # wycinany pasek od krawędzi
 STRETCH_MM = 5.0     # rozciągnięcie paska
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
+DPI = 300            # STAŁE DPI
+
+LOGO_PATH = "assets/logo CR.png"  # <- wrzuć logo do repo w tej ścieżce
+
+
+# =========================
+# POMOCNICZE
+# =========================
+def load_image_as_base64(path: str) -> str:
+    data = Path(path).read_bytes()
+    return base64.b64encode(data).decode("utf-8")
 
 def mm_to_px(mm: float, dpi: int) -> int:
     return int(round(mm * dpi / 25.4))
+
+def get_page_count(pdf_bytes: bytes) -> int:
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    n = doc.page_count
+    doc.close()
+    return n
 
 def render_pdf_page_to_image(pdf_bytes: bytes, page_index: int, dpi: int) -> Image.Image:
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -39,11 +61,10 @@ def apply_bleed_stretch(img: Image.Image, dpi: int, strip_mm: float, stretch_mm:
     if strip_px <= 0 or stretch_px <= 0:
         raise ValueError("Błędne parametry po przeliczeniu na px (spróbuj zwiększyć DPI).")
 
-    # zabezpieczenie przy bardzo małych stronach / DPI
     if strip_px * 2 >= h or strip_px * 2 >= w:
         raise ValueError(
             "Pasek 2mm jest za duży względem obrazu po rasteryzacji. "
-            "Zwiększ DPI albo sprawdź, czy PDF ma prawidłowy rozmiar strony."
+            "Sprawdź, czy PDF ma prawidłowy rozmiar strony."
         )
 
     # --- PION ---
@@ -98,25 +119,102 @@ def images_to_pdf_bytes(images: list[Image.Image], dpi: int) -> bytes:
     pdf.close()
     return out
 
-def get_page_count(pdf_bytes: bytes) -> int:
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    n = doc.page_count
-    doc.close()
-    return n
 
-# ---------------- UI ----------------
-st.set_page_config(page_title="Auto-spady (PDF) — 2 strony", layout="wide")
-st.title("Auto-spady do PDF (2 strony) — spad 3 mm przez rozciąganie krawędzi")
+# =========================
+# UI (WYGLĄD JAK LANDING)
+# =========================
+st.set_page_config(page_title="Dodaj spady do PDF", layout="centered")
 
-uploaded = st.file_uploader("Wgraj PDF (1–2 strony: przód/tył). Dowolny rozmiar strony.", type=["pdf"])
-dpi = st.slider("DPI podglądu / przetwarzania", 150, 600, 300, step=50)
+st.markdown("""
+<style>
+/* ukryj menu/stopkę streamlit */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
 
-st.caption(f"Zasada stała: pasek {STRIP_MM} mm → {STRETCH_MM} mm, czyli spad {BLEED_MM:.1f} mm z każdej strony.")
+/* zwęż i wyśrodkuj content */
+.block-container {
+    max-width: 720px;
+    padding-top: 44px;
+    padding-bottom: 80px;
+}
 
+/* centrowanie */
+.center {text-align: center;}
+
+/* przycisk jak w kaflu */
+.big-upload-wrap{
+    margin-top: 18px;
+    display: flex;
+    justify-content: center;
+}
+.big-upload-btn{
+    width: 520px;
+    max-width: 100%;
+    height: 120px;
+    background: #e6e6e6;
+    border-radius: 18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size: 22px;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+}
+.big-upload-btn:hover{
+    background: #dddddd;
+}
+
+/* chowamy standardowy wygląd file_uploader (zostawiamy sam input) */
+div[data-testid="stFileUploader"] > label {display:none;}
+div[data-testid="stFileUploader"] section {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+div[data-testid="stFileUploader"] section div {
+    padding: 0 !important;
+}
+div[data-testid="stFileUploader"] button {
+    display:none !important; /* ukryj domyślny przycisk */
+}
+div[data-testid="stFileUploader"] small {display:none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Logo ---
+logo_html = ""
+try:
+    b64 = load_image_as_base64(LOGO_PATH)
+    logo_html = f'<div class="center"><img src="data:image/png;base64,{b64}" style="max-width:460px; width:100%; height:auto;"></div>'
+except Exception:
+    logo_html = '<div class="center" style="font-size:42px; font-weight:900;">Czekalski</div>'
+
+st.markdown(logo_html, unsafe_allow_html=True)
+
+st.markdown('<div class="center" style="margin-top:12px; font-size:18px; font-weight:700;">Dodaj spady do pliku pdf</div>', unsafe_allow_html=True)
+st.markdown('<div class="center" style="margin-top:6px; font-size:13px; opacity:0.75;">Spad 3 mm przez rozciąganie krawędzi • DPI 300</div>', unsafe_allow_html=True)
+
+# --- Ukryty uploader + klikany kafel (przycisk) ---
+# Uwaga: Streamlit nie pozwala w 100% "kliknąć diva" aby otworzyć dialog pliku,
+# więc robimy: kafel + faktyczny uploader pod nim (niewidoczny), ale kliknięcie w kafel
+# instruuje użytkownika, żeby kliknął w kafel – a realnie klik będzie w obszar uploader-a.
+# Dlatego wstawiamy uploader w dokładnie tym samym miejscu wizualnie.
+
+st.markdown('<div class="big-upload-wrap">', unsafe_allow_html=True)
+st.markdown('<div class="big-upload-btn">Dodaj plik</div>', unsafe_allow_html=True)
+
+uploaded = st.file_uploader("PDF", type=["pdf"], label_visibility="collapsed")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# jeśli nie ma pliku – kończymy na „landing”
 if not uploaded:
-    st.info("Wgraj PDF, a pokażę podgląd (przód/tył) i wygeneruję PDF ze spadami.")
     st.stop()
 
+# =========================
+# PRZETWARZANIE
+# =========================
 pdf_bytes = uploaded.read()
 page_count = get_page_count(pdf_bytes)
 
@@ -125,19 +223,22 @@ if page_count < 1:
     st.stop()
 
 if page_count == 1:
-    st.warning("PDF ma 1 stronę. Zrobię spady tylko dla strony 1 (przód).")
     pages_to_process = [0]
+    st.success("Wczytano PDF: 1 strona — dodaję spady dla strony 1.")
 else:
-    st.success("PDF ma co najmniej 2 strony — przetworzę stronę 1 i 2 (przód/tył).")
     pages_to_process = [0, 1]
+    st.success("Wczytano PDF: min. 2 strony — przetwarzam stronę 1 i 2 (przód/tył).")
+
+st.markdown("---")
+st.markdown(f"**Parametry:** spad **{BLEED_MM:.1f} mm** na każdą krawędź • stałe **DPI {DPI}**")
 
 originals = []
 processed = []
 
 try:
     for idx in pages_to_process:
-        orig = render_pdf_page_to_image(pdf_bytes, page_index=idx, dpi=dpi)
-        out = apply_bleed_stretch(orig, dpi=dpi, strip_mm=STRIP_MM, stretch_mm=STRETCH_MM)
+        orig = render_pdf_page_to_image(pdf_bytes, page_index=idx, dpi=DPI)
+        out = apply_bleed_stretch(orig, dpi=DPI, strip_mm=STRIP_MM, stretch_mm=STRETCH_MM)
         originals.append(orig)
         processed.append(out)
 except Exception as e:
@@ -151,18 +252,19 @@ for tab, i, orig_img, proc_img in zip(tabs, pages_to_process, originals, process
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**Oryginał**")
-            st.image(orig_img, use_column_width=True)
+            st.image(orig_img, use_container_width=True)
         with c2:
             st.markdown("**Po dodaniu spadów**")
-            st.image(proc_img, use_column_width=True)
+            st.image(proc_img, use_container_width=True)
 
-        st.info(f"Efekt: +{BLEED_MM:.1f} mm na każdą krawędź (góra/dół/lewo/prawo).")
-
-out_pdf = images_to_pdf_bytes(processed, dpi=dpi)
+out_pdf = images_to_pdf_bytes(processed, dpi=DPI)
 
 st.download_button(
-    "Pobierz PDF ze spadami (1–2 strony)",
+    "Pobierz PDF ze spadami",
     data=out_pdf,
-    file_name=uploaded.name.replace(".pdf", "") + f"_spady_{int(BLEED_MM)}mm.pdf",
-    mime="application/pdf"
+    file_name=uploaded.name.replace(".pdf", "") + f"_spady_{BLEED_MM:.0f}mm.pdf",
+    mime="application/pdf",
+    use_container_width=True
 )
+
+st.caption("Uwaga: plik jest rasteryzowany (tekst staje się obrazem). Jeśli potrzebujesz wersji wektorowej — daj znać.")
