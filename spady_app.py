@@ -14,7 +14,7 @@ STRETCH_MM = 5.0
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
 DPI = 300
 
-LOGO_PATH = "assets/CR.png"  # <- wrzuć logo do repo w tej ścieżce
+LOGO_PATH = "assets/logo CR.png"  # <- wrzuć logo do repo w tej ścieżce
 
 
 # =========================
@@ -343,3 +343,4 @@ st.markdown("""
   if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
 </script>
 """, unsafe_allow_html=True)
+
