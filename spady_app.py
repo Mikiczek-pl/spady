@@ -14,7 +14,7 @@ STRETCH_MM = 5.0
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
 DPI = 300
 
-LOGO_PATH = "assets/logo CR.png"  # <- Twoje logo
+LOGO_PATH = "assets/CR.png"  # <- Twoje logo
 
 
 # =========================
@@ -188,17 +188,13 @@ div[data-testid="stFileUploader"] section{
   0% {transform: scale(0.6); opacity:0}
   100% {transform: scale(1); opacity:1}
 }
-.ready-title{
-  font-weight:800;
-}
-.ready-sub{
-  font-size:13px;
-  opacity:.8;
-  margin-top:2px;
-}
+.ready-title{font-weight:800;}
+.ready-sub{font-size:13px; opacity:.8; margin-top:2px;}
 
-/* ====== Zielony mega przycisk pobierania ====== */
-.download-green button {
+/* ====== PEWNY CSS na st.download_button ======
+   Streamlit renderuje to jako: div[data-testid="stDownloadButton"] button
+*/
+div[data-testid="stDownloadButton"] > button{
   background-color: #2e7d32 !important;
   color: #ffffff !important;
   font-size: 20px !important;
@@ -207,11 +203,12 @@ div[data-testid="stFileUploader"] section{
   border-radius: 14px !important;
   border: none !important;
   box-shadow: 0 10px 22px rgba(46,125,50,0.22) !important;
+  width: 100% !important;
 }
-.download-green button:hover {
+div[data-testid="stDownloadButton"] > button:hover{
   background-color: #1b5e20 !important;
 }
-.download-green button:active{
+div[data-testid="stDownloadButton"] > button:active{
   transform: translateY(1px);
 }
 </style>
@@ -280,7 +277,6 @@ st.markdown("---")
 # PRZETWARZANIE
 # =========================
 processed = []
-
 with st.spinner("Przetwarzam…"):
     try:
         for idx in pages_to_process:
@@ -295,7 +291,6 @@ with st.spinner("Przetwarzam…"):
 # PODGLĄD: W JEDNYM WIERSZU OBOK SIEBIE (TYLKO PO SPADACH)
 # =========================
 st.markdown("## Podgląd po dodaniu spadów")
-
 cols = st.columns(len(processed), gap="large")
 for i, (col, img) in enumerate(zip(cols, processed), start=1):
     with col:
@@ -308,7 +303,6 @@ for i, (col, img) in enumerate(zip(cols, processed), start=1):
 out_pdf = images_to_pdf_bytes(processed, dpi=DPI)
 pages_n = len(processed)
 
-# kotwica (scroll)
 st.markdown("<div id='download'></div>", unsafe_allow_html=True)
 
 st.markdown(
@@ -327,7 +321,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.markdown("<div class='download-green'>", unsafe_allow_html=True)
 st.download_button(
     "⬇️ Pobierz PDF ze spadami",
     data=out_pdf,
@@ -335,11 +328,9 @@ st.download_button(
     mime="application/pdf",
     use_container_width=True
 )
-st.markdown("</div>", unsafe_allow_html=True)
 
 st.caption("Uwaga: PDF jest rasteryzowany (tekst staje się obrazem).")
 
-# auto-scroll do przycisku
 st.markdown("""
 <script>
   const el = document.getElementById("download");
