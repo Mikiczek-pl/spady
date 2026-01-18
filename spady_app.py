@@ -14,7 +14,7 @@ STRETCH_MM = 5.0
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
 DPI = 300
 
-LOGO_PATH = "assets/logo CR.png"  # <- Twoje logo
+LOGO_PATH = "assets/CR.png"  # <- wrzuć logo do repo w tej ścieżce
 
 
 # =========================
@@ -123,7 +123,7 @@ footer {visibility: hidden;}
 
 .block-container{
     max-width: 1200px;
-    padding-top: 26px;
+    padding-top: 22px;
     padding-bottom: 40px;
 }
 
@@ -136,11 +136,11 @@ div[data-testid="stFileUploader"]{
     justify-content:center;
 }
 div[data-testid="stFileUploader"] section{
-    width: 640px;
+    width: 680px;
     max-width: 100%;
 }
 
-/* Pasek "wybrany plik" */
+/* Pasek pliku */
 .filebar{
     display:flex;
     align-items:center;
@@ -150,11 +150,69 @@ div[data-testid="stFileUploader"] section{
     border:1px solid #e6e8ee;
     border-radius:12px;
     padding:10px 14px;
-    margin: 6px auto 12px auto;
-    max-width: 880px;
+    margin: 6px auto 10px auto;
+    max-width: 980px;
 }
-.filename{
-    font-weight:600;
+.filename{font-weight:600;}
+
+/* ====== Sekcja "Gotowe" + animacja ====== */
+.ready-card{
+  background:#ecf8ef;
+  border:1px solid #bfe8c8;
+  border-radius:14px;
+  padding:14px 16px;
+  max-width:980px;
+  margin: 12px auto 10px auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.ready-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.ready-icon{
+  width:38px; height:38px;
+  border-radius:999px;
+  background:#2e7d32;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-weight:900;
+  animation: pop 450ms ease-out;
+}
+@keyframes pop{
+  0% {transform: scale(0.6); opacity:0}
+  100% {transform: scale(1); opacity:1}
+}
+.ready-title{
+  font-weight:800;
+}
+.ready-sub{
+  font-size:13px;
+  opacity:.8;
+  margin-top:2px;
+}
+
+/* ====== Zielony mega przycisk pobierania ====== */
+.download-green button {
+  background-color: #2e7d32 !important;
+  color: #ffffff !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  padding: 16px 18px !important;
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow: 0 8px 18px rgba(46,125,50,0.18) !important;
+}
+.download-green button:hover {
+  background-color: #1b5e20 !important;
+}
+.download-green button:active{
+  transform: translateY(1px);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -173,21 +231,18 @@ st.markdown('<div class="center" style="margin-top:8px; font-size:18px; font-wei
 st.markdown(f'<div class="center small-note">Spad {BLEED_MM:.0f} mm przez rozciąganie krawędzi • stałe DPI {DPI}</div>', unsafe_allow_html=True)
 st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
-# --- Upload (a potem "zwinięcie") ---
-# Używamy session_state, żeby po wgraniu pokazać pasek z nazwą + opcję zmiany pliku
+# --- Upload (zwijany) ---
 if "pdf_bytes" not in st.session_state:
     st.session_state.pdf_bytes = None
     st.session_state.pdf_name = None
 
 if st.session_state.pdf_bytes is None:
-    # bez etykiety (pusta), żeby nie było napisu
     uploaded = st.file_uploader("", type=["pdf"], label_visibility="collapsed")
     if not uploaded:
         st.stop()
     st.session_state.pdf_bytes = uploaded.read()
     st.session_state.pdf_name = uploaded.name
 else:
-    # zwinięty widok: nazwa + przycisk zmiany
     st.markdown(
         f"""
         <div class="filebar">
@@ -196,14 +251,14 @@ else:
         """,
         unsafe_allow_html=True
     )
-    cbtn1, cbtn2 = st.columns([1, 3])
+    cbtn1, cbtn2 = st.columns([1, 4])
     with cbtn1:
         if st.button("Zmień plik", use_container_width=True):
             st.session_state.pdf_bytes = None
             st.session_state.pdf_name = None
             st.rerun()
     with cbtn2:
-        st.caption("Jeśli chcesz wgrać inny PDF, kliknij „Zmień plik”.")
+        st.caption("Aby wgrać inny PDF, kliknij „Zmień plik”.")
 
 pdf_bytes = st.session_state.pdf_bytes
 page_count = get_page_count(pdf_bytes)
@@ -224,7 +279,6 @@ st.markdown("---")
 # =========================
 # PRZETWARZANIE
 # =========================
-originals = []
 processed = []
 
 with st.spinner("Przetwarzam…"):
@@ -232,44 +286,60 @@ with st.spinner("Przetwarzam…"):
         for idx in pages_to_process:
             orig = render_pdf_page_to_image(pdf_bytes, page_index=idx, dpi=DPI)
             out = apply_bleed_stretch(orig, dpi=DPI, strip_mm=STRIP_MM, stretch_mm=STRETCH_MM)
-            originals.append(orig)
             processed.append(out)
     except Exception as e:
         st.error(f"Błąd przetwarzania: {e}")
         st.stop()
 
 # =========================
-# PODGLĄD: DUŻY, CZYTELNY, MAŁO PUSTKI
+# PODGLĄD: TYLKO PO SPADACH, DUŻY, JEDEN POD DRUGIM
 # =========================
-st.markdown("## Podgląd")
-st.caption("Każda strona: po lewej oryginał, po prawej po dodaniu spadów.")
-
-# Dwie strony obok siebie. Każda strona ma 2 kolumny (oryginał/spady) w środku.
-page_cols = st.columns(len(pages_to_process), gap="large")
-
-for col, page_idx, orig_img, proc_img in zip(page_cols, pages_to_process, originals, processed):
-    with col:
-        st.markdown(f"### Strona {page_idx+1}")
-        a, b = st.columns(2, gap="small")
-        with a:
-            st.markdown("**Oryginał**")
-            st.image(orig_img, use_container_width=True)
-        with b:
-            st.markdown("**Po spadach**")
-            st.image(proc_img, use_container_width=True)
+st.markdown("## Podgląd po dodaniu spadów")
+for i, img in enumerate(processed, start=1):
+    st.markdown(f"### Strona {i}")
+    st.image(img, use_container_width=True)
 
 # =========================
-# POBRANIE
+# POBRANIE + KOMUNIKAT + AUTO-SCROLL
 # =========================
 out_pdf = images_to_pdf_bytes(processed, dpi=DPI)
+pages_n = len(processed)
 
-st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+# kotwica (scroll)
+st.markdown("<div id='download'></div>", unsafe_allow_html=True)
+
+st.markdown(
+    f"""
+    <div class="ready-card">
+      <div class="ready-left">
+        <div class="ready-icon">✓</div>
+        <div>
+          <div class="ready-title">Gotowe do pobrania</div>
+          <div class="ready-sub">Przetworzono: <b>{pages_n}</b> str. • Spad: <b>{BLEED_MM:.0f} mm</b> • DPI: <b>{DPI}</b></div>
+        </div>
+      </div>
+      <div style="font-size:28px; line-height:1;">📄</div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown("<div class='download-green'>", unsafe_allow_html=True)
 st.download_button(
-    "Pobierz PDF ze spadami",
+    "⬇️ Pobierz PDF ze spadami",
     data=out_pdf,
     file_name=st.session_state.pdf_name.replace(".pdf", "") + f"_spady_{BLEED_MM:.0f}mm.pdf",
     mime="application/pdf",
     use_container_width=True
 )
+st.markdown("</div>", unsafe_allow_html=True)
 
 st.caption("Uwaga: PDF jest rasteryzowany (tekst staje się obrazem).")
+
+# auto-scroll do przycisku
+st.markdown("""
+<script>
+  const el = document.getElementById("download");
+  if (el) el.scrollIntoView({behavior: "smooth", block: "start"});
+</script>
+""", unsafe_allow_html=True)
