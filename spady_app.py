@@ -9,12 +9,12 @@ from PIL import Image
 # =========================
 # USTAWIENIA (STAŁE)
 # =========================
-STRIP_MM = 2.0       # wycinany pasek od krawędzi
-STRETCH_MM = 5.0     # rozciągnięcie paska
+STRIP_MM = 2.0
+STRETCH_MM = 5.0
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
-DPI = 300            # STAŁE DPI
+DPI = 300
 
-LOGO_PATH = "assets/logo CR.png"  # <- wrzuć logo do repo w tej ścieżce
+LOGO_PATH = "assets/logo.png"  # wrzuć logo do repo w tej ścieżce
 
 
 # =========================
@@ -49,11 +49,6 @@ def render_pdf_page_to_image(pdf_bytes: bytes, page_index: int, dpi: int) -> Ima
     return img
 
 def apply_bleed_stretch(img: Image.Image, dpi: int, strip_mm: float, stretch_mm: float) -> Image.Image:
-    """
-    Metoda "rozciągania krawędzi":
-    1) Pion: góra (2mm->5mm), środek bez zmian, dół (2mm->5mm)
-    2) Poziom: lewo (2mm->5mm), środek bez zmian, prawo (2mm->5mm)
-    """
     w, h = img.size
     strip_px = mm_to_px(strip_mm, dpi)
     stretch_px = mm_to_px(stretch_mm, dpi)
@@ -95,12 +90,7 @@ def apply_bleed_stretch(img: Image.Image, dpi: int, strip_mm: float, stretch_mm:
     return out
 
 def images_to_pdf_bytes(images: list[Image.Image], dpi: int) -> bytes:
-    """
-    Składa obrazy do wielostronicowego PDF.
-    Rozmiar strony dopasowany 1:1 do obrazu (w pt).
-    """
     pdf = fitz.open()
-
     for img in images:
         w_px, h_px = img.size
         w_pt = w_px * 72.0 / dpi
@@ -121,100 +111,59 @@ def images_to_pdf_bytes(images: list[Image.Image], dpi: int) -> bytes:
 
 
 # =========================
-# UI (WYGLĄD JAK LANDING)
+# UI
 # =========================
 st.set_page_config(page_title="Dodaj spady do PDF", layout="centered")
 
 st.markdown("""
 <style>
-/* ukryj menu/stopkę streamlit */
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
 
-/* zwęż i wyśrodkuj content */
-.block-container {
-    max-width: 720px;
-    padding-top: 44px;
+.block-container{
+    max-width: 980px;
+    padding-top: 40px;
     padding-bottom: 80px;
 }
 
-/* centrowanie */
-.center {text-align: center;}
+.center {text-align:center;}
 
-/* przycisk jak w kaflu */
-.big-upload-wrap{
-    margin-top: 18px;
+/* wycentruj uploader */
+div[data-testid="stFileUploader"]{
     display: flex;
     justify-content: center;
 }
-.big-upload-btn{
-    width: 520px;
+div[data-testid="stFileUploader"] section{
+    width: 620px;
     max-width: 100%;
-    height: 120px;
-    background: #e6e6e6;
-    border-radius: 18px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size: 22px;
-    font-weight: 700;
-    cursor: pointer;
-    user-select: none;
-}
-.big-upload-btn:hover{
-    background: #dddddd;
 }
 
-/* chowamy standardowy wygląd file_uploader (zostawiamy sam input) */
-div[data-testid="stFileUploader"] > label {display:none;}
-div[data-testid="stFileUploader"] section {
-    border: none !important;
-    background: transparent !important;
-    padding: 0 !important;
-}
-div[data-testid="stFileUploader"] section div {
-    padding: 0 !important;
-}
-div[data-testid="stFileUploader"] button {
-    display:none !important; /* ukryj domyślny przycisk */
-}
-div[data-testid="stFileUploader"] small {display:none !important;}
+/* delikatniejszy wygląd sekcji */
+.small-note{opacity:.75; font-size:13px;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Logo ---
-logo_html = ""
+# --- Logo + nagłówki ---
 try:
     b64 = load_image_as_base64(LOGO_PATH)
-    logo_html = f'<div class="center"><img src="data:image/png;base64,{b64}" style="max-width:460px; width:100%; height:auto;"></div>'
+    st.markdown(
+        f'<div class="center"><img src="data:image/png;base64,{b64}" style="max-width:460px; width:100%; height:auto;"></div>',
+        unsafe_allow_html=True
+    )
 except Exception:
-    logo_html = '<div class="center" style="font-size:42px; font-weight:900;">Czekalski</div>'
+    st.markdown('<div class="center" style="font-size:42px; font-weight:900;">Czekalski</div>', unsafe_allow_html=True)
 
-st.markdown(logo_html, unsafe_allow_html=True)
+st.markdown('<div class="center" style="margin-top:10px; font-size:18px; font-weight:700;">Dodaj spady do pliku pdf</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="center small-note">Spad {BLEED_MM:.0f} mm przez rozciąganie krawędzi • stałe DPI {DPI}</div>', unsafe_allow_html=True)
+st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
 
-st.markdown('<div class="center" style="margin-top:12px; font-size:18px; font-weight:700;">Dodaj spady do pliku pdf</div>', unsafe_allow_html=True)
-st.markdown('<div class="center" style="margin-top:6px; font-size:13px; opacity:0.75;">Spad 3 mm przez rozciąganie krawędzi • DPI 300</div>', unsafe_allow_html=True)
+# --- Uploader (sam, wycentrowany) ---
+uploaded = st.file_uploader("Wgraj PDF (1–2 strony: przód/tył).", type=["pdf"])
 
-# --- Ukryty uploader + klikany kafel (przycisk) ---
-# Uwaga: Streamlit nie pozwala w 100% "kliknąć diva" aby otworzyć dialog pliku,
-# więc robimy: kafel + faktyczny uploader pod nim (niewidoczny), ale kliknięcie w kafel
-# instruuje użytkownika, żeby kliknął w kafel – a realnie klik będzie w obszar uploader-a.
-# Dlatego wstawiamy uploader w dokładnie tym samym miejscu wizualnie.
-
-st.markdown('<div class="big-upload-wrap">', unsafe_allow_html=True)
-st.markdown('<div class="big-upload-btn">Dodaj plik</div>', unsafe_allow_html=True)
-
-uploaded = st.file_uploader("PDF", type=["pdf"], label_visibility="collapsed")
-st.markdown('</div>', unsafe_allow_html=True)
-
-# jeśli nie ma pliku – kończymy na „landing”
 if not uploaded:
     st.stop()
 
-# =========================
-# PRZETWARZANIE
-# =========================
 pdf_bytes = uploaded.read()
 page_count = get_page_count(pdf_bytes)
 
@@ -222,16 +171,19 @@ if page_count < 1:
     st.error("PDF nie ma stron.")
     st.stop()
 
+pages_to_process = [0] if page_count == 1 else [0, 1]
+
 if page_count == 1:
-    pages_to_process = [0]
     st.success("Wczytano PDF: 1 strona — dodaję spady dla strony 1.")
 else:
-    pages_to_process = [0, 1]
     st.success("Wczytano PDF: min. 2 strony — przetwarzam stronę 1 i 2 (przód/tył).")
 
 st.markdown("---")
 st.markdown(f"**Parametry:** spad **{BLEED_MM:.1f} mm** na każdą krawędź • stałe **DPI {DPI}**")
 
+# =========================
+# PRZETWARZANIE
+# =========================
 originals = []
 processed = []
 
@@ -245,19 +197,32 @@ except Exception as e:
     st.error(f"Błąd przetwarzania: {e}")
     st.stop()
 
-tabs = st.tabs([f"Strona {i+1}" for i in pages_to_process])
+# =========================
+# PODGLĄD: 2 STRONY OBOK SIEBIE
+# =========================
+st.markdown("### Podgląd")
+st.caption("Po lewej oryginał, po prawej wersja po dodaniu spadów.")
 
-for tab, i, orig_img, proc_img in zip(tabs, pages_to_process, originals, processed):
-    with tab:
+# Każda strona to osobna kolumna, a w niej: (oryginał, spady)
+page_cols = st.columns(len(pages_to_process))
+
+for col, page_idx, orig_img, proc_img in zip(page_cols, pages_to_process, originals, processed):
+    with col:
+        st.markdown(f"**Strona {page_idx+1}**")
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("**Oryginał**")
+            st.markdown("<div class='small-note'><b>Oryginał</b></div>", unsafe_allow_html=True)
             st.image(orig_img, use_container_width=True)
         with c2:
-            st.markdown("**Po dodaniu spadów**")
+            st.markdown("<div class='small-note'><b>Po spadach</b></div>", unsafe_allow_html=True)
             st.image(proc_img, use_container_width=True)
 
+# =========================
+# POBRANIE
+# =========================
 out_pdf = images_to_pdf_bytes(processed, dpi=DPI)
+
+st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
 st.download_button(
     "Pobierz PDF ze spadami",
@@ -267,4 +232,4 @@ st.download_button(
     use_container_width=True
 )
 
-st.caption("Uwaga: plik jest rasteryzowany (tekst staje się obrazem). Jeśli potrzebujesz wersji wektorowej — daj znać.")
+st.caption("Uwaga: PDF jest rasteryzowany (tekst staje się obrazem).")
