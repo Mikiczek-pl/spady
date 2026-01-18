@@ -14,7 +14,7 @@ STRETCH_MM = 5.0
 BLEED_MM = STRETCH_MM - STRIP_MM  # 3 mm
 DPI = 300
 
-LOGO_PATH = "assets/logo CR.png"  # wrzuć logo do repo w tej ścieżce
+LOGO_PATH = "assets/logo CR.png"  # <- Twoje logo
 
 
 # =========================
@@ -54,7 +54,7 @@ def apply_bleed_stretch(img: Image.Image, dpi: int, strip_mm: float, stretch_mm:
     stretch_px = mm_to_px(stretch_mm, dpi)
 
     if strip_px <= 0 or stretch_px <= 0:
-        raise ValueError("Błędne parametry po przeliczeniu na px (spróbuj zwiększyć DPI).")
+        raise ValueError("Błędne parametry po przeliczeniu na px.")
 
     if strip_px * 2 >= h or strip_px * 2 >= w:
         raise ValueError(
@@ -113,7 +113,7 @@ def images_to_pdf_bytes(images: list[Image.Image], dpi: int) -> bytes:
 # =========================
 # UI
 # =========================
-st.set_page_config(page_title="Dodaj spady do PDF", layout="centered")
+st.set_page_config(page_title="Dodaj spady do PDF", layout="wide")
 
 st.markdown("""
 <style>
@@ -122,49 +122,90 @@ header {visibility: hidden;}
 footer {visibility: hidden;}
 
 .block-container{
-    max-width: 980px;
-    padding-top: 40px;
-    padding-bottom: 80px;
+    max-width: 1200px;
+    padding-top: 26px;
+    padding-bottom: 40px;
 }
 
 .center {text-align:center;}
+.small-note{opacity:.75; font-size:13px;}
 
-/* wycentruj uploader */
+/* Uploader centrowany */
 div[data-testid="stFileUploader"]{
-    display: flex;
-    justify-content: center;
+    display:flex;
+    justify-content:center;
 }
 div[data-testid="stFileUploader"] section{
-    width: 620px;
+    width: 640px;
     max-width: 100%;
 }
 
-/* delikatniejszy wygląd sekcji */
-.small-note{opacity:.75; font-size:13px;}
+/* Pasek "wybrany plik" */
+.filebar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background:#f5f7fa;
+    border:1px solid #e6e8ee;
+    border-radius:12px;
+    padding:10px 14px;
+    margin: 6px auto 12px auto;
+    max-width: 880px;
+}
+.filename{
+    font-weight:600;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Logo + nagłówki ---
+# --- Logo + nagłówek ---
 try:
     b64 = load_image_as_base64(LOGO_PATH)
     st.markdown(
-        f'<div class="center"><img src="data:image/png;base64,{b64}" style="max-width:460px; width:100%; height:auto;"></div>',
+        f'<div class="center"><img src="data:image/png;base64,{b64}" style="max-width:520px; width:100%; height:auto;"></div>',
         unsafe_allow_html=True
     )
 except Exception:
-    st.markdown('<div class="center" style="font-size:42px; font-weight:900;">Czekalski</div>', unsafe_allow_html=True)
+    st.markdown('<div class="center" style="font-size:42px; font-weight:900;">Centrum Reklamy</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="center" style="margin-top:10px; font-size:18px; font-weight:700;">Dodaj spady do pliku pdf</div>', unsafe_allow_html=True)
+st.markdown('<div class="center" style="margin-top:8px; font-size:18px; font-weight:700;">Dodaj spady do pliku PDF</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="center small-note">Spad {BLEED_MM:.0f} mm przez rozciąganie krawędzi • stałe DPI {DPI}</div>', unsafe_allow_html=True)
-st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
-# --- Uploader (sam, wycentrowany) ---
-uploaded = st.file_uploader("Wgraj PDF (1–2 strony: przód/tył).", type=["pdf"])
+# --- Upload (a potem "zwinięcie") ---
+# Używamy session_state, żeby po wgraniu pokazać pasek z nazwą + opcję zmiany pliku
+if "pdf_bytes" not in st.session_state:
+    st.session_state.pdf_bytes = None
+    st.session_state.pdf_name = None
 
-if not uploaded:
-    st.stop()
+if st.session_state.pdf_bytes is None:
+    # bez etykiety (pusta), żeby nie było napisu
+    uploaded = st.file_uploader("", type=["pdf"], label_visibility="collapsed")
+    if not uploaded:
+        st.stop()
+    st.session_state.pdf_bytes = uploaded.read()
+    st.session_state.pdf_name = uploaded.name
+else:
+    # zwinięty widok: nazwa + przycisk zmiany
+    st.markdown(
+        f"""
+        <div class="filebar">
+            <div class="filename">📄 {st.session_state.pdf_name}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    cbtn1, cbtn2 = st.columns([1, 3])
+    with cbtn1:
+        if st.button("Zmień plik", use_container_width=True):
+            st.session_state.pdf_bytes = None
+            st.session_state.pdf_name = None
+            st.rerun()
+    with cbtn2:
+        st.caption("Jeśli chcesz wgrać inny PDF, kliknij „Zmień plik”.")
 
-pdf_bytes = uploaded.read()
+pdf_bytes = st.session_state.pdf_bytes
 page_count = get_page_count(pdf_bytes)
 
 if page_count < 1:
@@ -179,7 +220,6 @@ else:
     st.success("Wczytano PDF: min. 2 strony — przetwarzam stronę 1 i 2 (przód/tył).")
 
 st.markdown("---")
-st.markdown(f"**Parametry:** spad **{BLEED_MM:.1f} mm** na każdą krawędź • stałe **DPI {DPI}**")
 
 # =========================
 # PRZETWARZANIE
@@ -187,34 +227,35 @@ st.markdown(f"**Parametry:** spad **{BLEED_MM:.1f} mm** na każdą krawędź •
 originals = []
 processed = []
 
-try:
-    for idx in pages_to_process:
-        orig = render_pdf_page_to_image(pdf_bytes, page_index=idx, dpi=DPI)
-        out = apply_bleed_stretch(orig, dpi=DPI, strip_mm=STRIP_MM, stretch_mm=STRETCH_MM)
-        originals.append(orig)
-        processed.append(out)
-except Exception as e:
-    st.error(f"Błąd przetwarzania: {e}")
-    st.stop()
+with st.spinner("Przetwarzam…"):
+    try:
+        for idx in pages_to_process:
+            orig = render_pdf_page_to_image(pdf_bytes, page_index=idx, dpi=DPI)
+            out = apply_bleed_stretch(orig, dpi=DPI, strip_mm=STRIP_MM, stretch_mm=STRETCH_MM)
+            originals.append(orig)
+            processed.append(out)
+    except Exception as e:
+        st.error(f"Błąd przetwarzania: {e}")
+        st.stop()
 
 # =========================
-# PODGLĄD: 2 STRONY OBOK SIEBIE
+# PODGLĄD: DUŻY, CZYTELNY, MAŁO PUSTKI
 # =========================
-st.markdown("### Podgląd")
-st.caption("Po lewej oryginał, po prawej wersja po dodaniu spadów.")
+st.markdown("## Podgląd")
+st.caption("Każda strona: po lewej oryginał, po prawej po dodaniu spadów.")
 
-# Każda strona to osobna kolumna, a w niej: (oryginał, spady)
-page_cols = st.columns(len(pages_to_process))
+# Dwie strony obok siebie. Każda strona ma 2 kolumny (oryginał/spady) w środku.
+page_cols = st.columns(len(pages_to_process), gap="large")
 
 for col, page_idx, orig_img, proc_img in zip(page_cols, pages_to_process, originals, processed):
     with col:
-        st.markdown(f"**Strona {page_idx+1}**")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("<div class='small-note'><b>Oryginał</b></div>", unsafe_allow_html=True)
+        st.markdown(f"### Strona {page_idx+1}")
+        a, b = st.columns(2, gap="small")
+        with a:
+            st.markdown("**Oryginał**")
             st.image(orig_img, use_container_width=True)
-        with c2:
-            st.markdown("<div class='small-note'><b>Po spadach</b></div>", unsafe_allow_html=True)
+        with b:
+            st.markdown("**Po spadach**")
             st.image(proc_img, use_container_width=True)
 
 # =========================
@@ -223,14 +264,12 @@ for col, page_idx, orig_img, proc_img in zip(page_cols, pages_to_process, origin
 out_pdf = images_to_pdf_bytes(processed, dpi=DPI)
 
 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-
 st.download_button(
     "Pobierz PDF ze spadami",
     data=out_pdf,
-    file_name=uploaded.name.replace(".pdf", "") + f"_spady_{BLEED_MM:.0f}mm.pdf",
+    file_name=st.session_state.pdf_name.replace(".pdf", "") + f"_spady_{BLEED_MM:.0f}mm.pdf",
     mime="application/pdf",
     use_container_width=True
 )
 
 st.caption("Uwaga: PDF jest rasteryzowany (tekst staje się obrazem).")
-
